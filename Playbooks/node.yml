@@ -1,0 +1,60 @@
+---
+- name: Install and run BE using Docker
+  hosts: all
+  become: yes
+
+  vars:
+    docker_image: "thomazjoseph/node_test123"
+    docker_tag: "latest"
+    container_name: "node-test" 
+    docker_username: "{{ lookup('env', 'docker_username') }}"
+    docker_password: "{{ lookup('env', 'docker_password') }}"
+
+  tasks:
+
+    - name: Docker login
+      docker_login:
+        username: "{{ docker_username }}"
+        password: "{{ docker_password }}"
+        registry: "https://index.docker.io/v1/"
+      when: docker_username is defined and docker_password is defined
+
+    - name: Pull Docker image
+      docker_image:
+        name: "{{ docker_image }}"
+        tag: "{{ docker_tag }}"
+        source: pull
+
+    - name: Check if the container is running
+      docker_container_info:
+        name: "{{ container_name }}"
+      register: node
+
+    - name: Stop existing container (if running)
+      docker_container:
+        name: "{{ container_name }}"
+        image: "{{ docker_image }}:{{ docker_tag }}"
+        state: stopped
+      when: node.container is not none and node.container.State is defined and node.container.State.Running
+
+    - name: Remove existing container (if exists)
+      docker_container:
+        name: "{{ container_name }}"
+        state: absent
+      when: node.container is not none
+
+    - name: Remove old docker image
+      docker_image:
+        name: "{{ docker_image }}"
+        tag: "{{ docker_tag }}"
+        state: absent
+      when: node.container is not none
+
+    - name: Run container
+      docker_container:
+        name: "{{ container_name }}"
+        image: "{{ docker_image }}:{{ docker_tag }}"
+        state: started
+        restart_policy: always
+        ports:
+          - "80:3000"
